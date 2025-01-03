@@ -1,6 +1,10 @@
 pipeline {
     agent any
 
+    environment {
+        PATH = "/usr/bin/python3:${env.PATH}"
+    }
+
     stages {
         stage('Build') {
             steps {
