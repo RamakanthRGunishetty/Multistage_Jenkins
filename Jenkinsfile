@@ -1,14 +1,16 @@
 pipeline {
     agent any
 
+    environment {
+        DOCKER_IMAGE = "jenkins/jenkins:lts"
+    }
+
     stages {
         stage('Build') {
             steps {
                 echo 'Creating virtual environment and installing dependencies...'
                 script {
-                    // Create a virtual environment
                     sh 'python3 -m venv ${WORKSPACE}/.venv'
-                    // Install dependencies from requirements.txt inside the virtual environment
                     sh '''
                     . ${WORKSPACE}/.venv/bin/activate
                     pip3 install -r ${WORKSPACE}/requirements.txt
@@ -20,7 +22,6 @@ pipeline {
             steps {
                 echo 'Running tests...'
                 script {
-                    // Run tests using the virtual environment
                     sh '''
                     . ${WORKSPACE}/.venv/bin/activate
                     python3 -m unittest discover -s .
@@ -28,40 +29,35 @@ pipeline {
                 }
             }
         }
-        stage('Deploy') {
+        stage('Build Docker Image') {
             steps {
-                echo 'Deploying application...'
+                echo 'Building Docker image...'
                 script {
-                    // Ensure virtual environment is active during deployment
                     sh '''
-                    . ${WORKSPACE}/.venv/bin/activate
-                    mkdir -p ${WORKSPACE}/python-app-deploy
-                    cp ${WORKSPACE}/app.py ${WORKSPACE}/python-app-deploy/
+                    docker build -t ${DOCKER_IMAGE} ${WORKSPACE}
                     '''
                 }
             }
         }
-        stage('Run Application') {
+        stage('Deploy Docker Container') {
             steps {
-                echo 'Running application...'
+                echo 'Deploying Docker container...'
                 script {
-                    // Run the application in the background, using the virtual environment
+                    // Stop and remove existing container if running
                     sh '''
-                    . ${WORKSPACE}/.venv/bin/activate
-                    nohup python3 ${WORKSPACE}/python-app-deploy/app.py > ${WORKSPACE}/python-app-deploy/app.log 2>&1 &
-                    echo $! > ${WORKSPACE}/python-app-deploy/app.pid
+                    docker stop ${CONTAINER_NAME} || true
+                    docker rm ${CONTAINER_NAME} || true
+                    docker run -d --name ${CONTAINER_NAME} -p 5000:5000 ${DOCKER_IMAGE}
                     '''
                 }
             }
         }
-        stage('Test Application') {
+        stage('Test Application in Docker') {
             steps {
-                echo 'Testing application...'
+                echo 'Testing application in Docker...'
                 script {
-                    // Run the test script using the virtual environment
                     sh '''
-                    . ${WORKSPACE}/.venv/bin/activate
-                    python3 ${WORKSPACE}/test_app.py
+                    docker exec ${CONTAINER_NAME} python3 /app/test_app.py
                     '''
                 }
             }
