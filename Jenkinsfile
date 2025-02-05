@@ -1,65 +1,42 @@
 pipeline {
     agent any
 
-    environment {
-        DOCKER_IMAGE = "jenkins/jenkins:lts"
-    }
-
     stages {
         stage('Build') {
             steps {
                 echo 'Creating virtual environment and installing dependencies...'
-                script {
-                    sh 'python3 -m venv ${WORKSPACE}/.venv'
-                    sh '''
-                    . ${WORKSPACE}/.venv/bin/activate
-                    pip3 install -r ${WORKSPACE}/requirements.txt
-                    '''
-                }
             }
         }
         stage('Test') {
             steps {
                 echo 'Running tests...'
-                script {
-                    sh '''
-                    . ${WORKSPACE}/.venv/bin/activate
-                    python3 -m unittest discover -s .
-                    '''
-                }
+                sh 'python3 -m unittest discover -s .'
             }
         }
-        stage('Build Docker Image') {
+        stage('Deploy') {
             steps {
-                echo 'Building Docker image...'
-                script {
-                    sh '''
-                    docker build -t ${DOCKER_IMAGE} ${WORKSPACE}
-                    '''
-                }
+                echo 'Deploying application...'
+                sh '''
+                mkdir -p ${WORKSPACE}/python-app-deploy
+                cp ${WORKSPACE}/app.py ${WORKSPACE}/python-app-deploy/
+                '''
             }
         }
-        stage('Deploy Docker Container') {
+        stage('Run Application') {
             steps {
-                echo 'Deploying Docker container...'
-                script {
-                    // Stop and remove existing container if running
-                    sh '''
-                    docker stop ${CONTAINER_NAME} || true
-                    docker rm ${CONTAINER_NAME} || true
-                    docker run -d --name ${CONTAINER_NAME} -p 5000:5000 ${DOCKER_IMAGE}
-                    '''
-                }
+                echo 'Running application...'
+                sh '''
+                nohup python3 ${WORKSPACE}/python-app-deploy/app.py > ${WORKSPACE}/python-app-deploy/app.log 2>&1 &
+                echo $! > ${WORKSPACE}/python-app-deploy/app.pid
+                '''
             }
         }
-        stage('Test Application in Docker') {
+        stage('Test Application') {
             steps {
-                echo 'Testing application in Docker...'
-                script {
-                    sh '''
-                    docker exec ${CONTAINER_NAME} python3 /app/test_app.py
-                    '''
-                }
+                echo 'Testing application...'
+                sh '''
+                python3 ${WORKSPACE}/test_app.py
+                '''
             }
         }
     }
